@@ -147,9 +147,9 @@ class InteractionView(BaseView):
                 response = requests.post('http://192.168.194.192:8080/', json=self.conversation)
                 response = str(response.json())
 
-                self._hacrs.append(self._msg_fmt % ('INFO', "Sending to apogee..."))
-                self._hacrs.append(self._msg_fmt % ('INFO', str(self.conversation)))
-                self._hacrs.append(self._msg_fmt % ('INFO', response))
+                self._history_text.append(self._msg_fmt % ('INFO', "Sending to apogee..."))
+                self._history_text.append(self._msg_fmt % ('INFO', str(self.conversation)))
+                self._history_text.append(self._msg_fmt % ('INFO', response))
                 _l.debug(str(self.conversation))
                 _l.debug(response)
                 self.conversation = []
