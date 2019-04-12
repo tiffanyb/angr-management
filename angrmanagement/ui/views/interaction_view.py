@@ -8,10 +8,11 @@ import archr
 
 import socket
 import nclib
+import requests
 
 from .view import BaseView
 
-import os, contextlib, subprocess
+import os, contextlib, subprocess, time
 from threading import Thread
 
 import logging
@@ -31,7 +32,7 @@ class InteractionView(BaseView):
         self._init_widgets()
 
         self.sock = None
-
+        self.conversation = []
         self._msg_fmt = '%-10s: %s'
 
     #
@@ -47,7 +48,16 @@ class InteractionView(BaseView):
 
         self._history_text.append(self._msg_fmt % ('INPUT', command))
 
+        self.conversation.append({
+            'time': time.time(),
+            'data': command,
+            'channel': 'stdio',
+            'direction': 'send'
+        })
+
+        _l.debug('Appended to conversation')
         if self.sock is not None:
+            _l.debug('Socker is not None')
             self.sock.write(command.encode())
         else:
             self._history_text.append('[ERROR] Connection not established. Did you load the image AND hit Interact (F6)?')
@@ -125,8 +135,24 @@ class InteractionView(BaseView):
                         break
                     else:
                         self._history_text.append(self._msg_fmt % ('OUTPUT', data.decode()))
+                        self.conversation.append({
+                            'time': time.time(),
+                            'data': data.decode(),
+                            'channel': 'stdio',
+                            'direction': 'recv'
+                        })
                 self._history_text.append('Connection closed')
                 self.sock = None
+
+                response = requests.post('http://192.168.194.192:8080/', json=self.conversation)
+                response = str(response.json())
+
+                self._hacrs.append(self._msg_fmt % ('INFO', "Sending to apogee..."))
+                self._hacrs.append(self._msg_fmt % ('INFO', str(self.conversation)))
+                self._hacrs.append(self._msg_fmt % ('INFO', response))
+                _l.debug(str(self.conversation))
+                _l.debug(response)
+                self.conversation = []
 
     def setFocus(self):
         self._command.setFocus()
