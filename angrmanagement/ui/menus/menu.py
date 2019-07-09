@@ -54,8 +54,7 @@ class Menu:
 
     def action_by_key(self, key):
         if not self._keyed_entries:
-            self._keyed_entries = dict((ent.key, ent) for ent in
-                    self.entries if isinstance(ent, MenuEntry)
+            self._keyed_entries = dict((ent.key, ent) for ent in self.entries)
         return self._keyed_entries.get(key, None)
 
     def qmenu(self):
