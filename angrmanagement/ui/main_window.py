@@ -1,3 +1,4 @@
+import json
 import pickle
 import os
 from functools import partial
@@ -91,6 +92,12 @@ class MainWindow(QMainWindow):
 
         if file_to_open is not None:
             self.load_file(file_to_open)
+            self._file_menu.action_by_key('load_trace').enable()
+
+        self.load_file('/home/tiffanyb/Angr/test/hello')
+        self._file_menu.action_by_key('load_trace').enable()
+        # import time; time.sleep(5)
+        # self.load_trace('/home/tiffanyb/Angr/test/trace')
 
     def sizeHint(self, *args, **kwargs):
         return QSize(1200, 800)
@@ -320,6 +327,7 @@ class MainWindow(QMainWindow):
     def open_file_button(self):
         file_path = self._open_mainfile_dialog()
         self.load_file(file_path)
+        self._file_menu.action_by_key('load_trace').enable()
 
     def open_docker_button(self):
         required = {
@@ -341,8 +349,9 @@ class MainWindow(QMainWindow):
         self.load_image(img_name)
 
     def open_trace(self):
-        trace_path = self._open_mainfile_dialog()
-        self.load_trace(trace_path)
+        # trace_path = self._open_mainfile_dialog()
+        # self.load_trace(trace_path)
+        self.load_trace('/home/tiffanyb/Angr/test/trace')
 
     def load_file(self, file_path):
         if os.path.isfile(file_path):
@@ -375,10 +384,14 @@ class MainWindow(QMainWindow):
 
     def load_trace(self, trace_path):
         if os.path.isfile(trace_path):
-            with open(trace_file, 'r') as f:
+            with open(trace_path, 'r') as f:
                 trace = json.load(f)
+                trace = [0x40063a, 0x40064a, 0x40063a, 0x40063a, 0x400500]
+                self._set_trace(trace)
 
-        pass
+    def _set_trace(self, trace):
+        self.workspace.instance.set_trace(trace)
+        self.workspace.view_manager.first_view_in_category('disassembly').show_trace()
 
     def save_database(self):
         if self.workspace.instance.database_path is None:

@@ -8,6 +8,9 @@ from .qgraph_object import QGraphObject
 from .qoperand import QOperand
 from ...utils import should_display_string_label, get_string_for_display, get_comment_for_display
 
+import logging
+l = logging.getLogger(name=__name__)
+l.setLevel('INFO')
 
 class QInstruction(QGraphObject):
 
@@ -15,6 +18,8 @@ class QInstruction(QGraphObject):
     GRAPH_MNEMONIC_SPACING = 10
     GRAPH_OPERAND_SPACING = 2
     GRAPH_COMMENT_STRING_SPACING = 10
+    GRAPH_TRACE_LEGEND_WIDTH = 30
+    GRAPH_TRACE_LEGEND_SPACING = 20
 
     LINEAR_INSTRUCTION_OFFSET = 120
     COMMENT_PREFIX = "// "
@@ -46,6 +51,8 @@ class QInstruction(QGraphObject):
         self._string_width = None
         self._comment = None
         self._comment_width = None
+        self._trace = None
+        self._trace_width = None
 
         self._init_widgets()
 
@@ -212,6 +219,9 @@ class QInstruction(QGraphObject):
         elif self._string is not None:
             self._width += self.GRAPH_COMMENT_STRING_SPACING + self._string_width
 
+        if self._trace is not None:
+            self._width += self.GRAPH_OPERAND_SPACING + self._trace_width
+
     def _paint_highlight(self, painter):
         r, g, b = self.insn_backcolor
 
@@ -225,6 +235,33 @@ class QInstruction(QGraphObject):
         self._paint_highlight(painter)
 
         x = self.x
+
+        # trace legend
+        if self.workspace.instance.trace is not None:
+            x_start = x - self.GRAPH_TRACE_LEGEND_WIDTH - self.GRAPH_TRACE_LEGEND_SPACING
+            self._trace = True
+            self._trace_width = self.GRAPH_TRACE_LEGEND_WIDTH
+            count = self.workspace.instance.trace.get_count(self.insn.addr)
+            # l.info('Addr: %x, Count: %d' % (self.insn.addr, count))
+
+            if count > 0:
+                if count > self.GRAPH_TRACE_LEGEND_WIDTH:
+                    jump = count / self.GRAPH_TRACE_LEGEND_WIDTH
+                    i_width = [(jump * i, 1) for i in
+                            range(self.GRAPH_TRACE_LEGEND_WIDTH)]
+
+                else:
+                    width = self.GRAPH_TRACE_LEGEND_WIDTH / count
+                    remainder = self.GRAPH_TRACE_LEGEND_WIDTH % count
+                    i_width = [(i, width + 1) for i in range(remainder)] + \
+                            [(i, width) for i in range(remainder, count)]
+
+                for (i, w) in i_width:
+                    color = self.workspace.instance.trace.get_color(self.insn.addr, i)
+                    painter.setPen(color)
+                    painter.setBrush(color)
+                    painter.drawRect(x_start, self.y, w, 30)
+                    x_start += w
 
         # address
         if self.disasm_view.show_address:

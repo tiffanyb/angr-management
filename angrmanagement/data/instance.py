@@ -11,6 +11,7 @@ from .sync_ctrl import SyncControl
 from ..logic import GlobalInfo
 from ..logic.threads import gui_thread_schedule_async
 
+from .trace_statistics import TraceStatistics
 
 class Instance:
     def __init__(self, project=None):
@@ -34,6 +35,8 @@ class Instance:
 
         self._cfg = None
         self._cfb = None
+
+        self.trace = None
 
         self.database_path = None
 
@@ -97,6 +100,9 @@ class Instance:
     def set_image(self, image):
         self.img_name = image
 
+    def set_trace(self, trace):
+        self.trace = TraceStatistics(self.workspace, trace)
+
     def initialize(self, cfg_args=None):
         if cfg_args is None:
             cfg_args = {}
@@ -126,6 +132,7 @@ class Instance:
             pickled = pickle.dumps(self)
             store = ana.get_dl()._state_store
             pickle.dump({'store': store, 'pickled': pickled}, f)
+
 
     @staticmethod
     def from_file(loc):

@@ -1,13 +1,13 @@
 from typing import Union, Callable
 
-from PySide2.QtWidgets import QVBoxLayout, QMenu, QApplication
+from PySide2.QtWidgets import QHBoxLayout, QVBoxLayout, QMenu, QApplication
 from PySide2.QtCore import Qt, QSize
 
 from ...data.instance import ObjectContainer
 from ...utils import locate_function
 from ...data.function_graph import FunctionGraph
 from ...logic.disassembly import JumpHistory, InfoDock
-from ..widgets import QDisasmGraph, QDisasmStatusBar, QLinearViewer
+from ..widgets import QDisasmGraph, QDisasmStatusBar, QLinearViewer, QTraceViewer
 from ..dialogs.jumpto import JumpTo
 from ..dialogs.rename_label import RenameLabel
 from ..dialogs.set_comment import SetComment
@@ -30,6 +30,7 @@ class DisassemblyView(BaseView):
 
         self._linear_viewer = None  # type: QLinearViewer
         self._flow_graph = None  # type: QDisasmGraph
+        self._trace_viewer = None # type: QTraceViewer
         self._statusbar = None
         self._jump_history = JumpHistory()
         self.infodock = InfoDock()
@@ -304,6 +305,9 @@ class DisassemblyView(BaseView):
             self.current_graph.select_instruction(insn_addr, unique=QApplication.keyboardModifiers() != Qt.ControlModifier)
             self.current_graph.show_instruction(insn_addr)
 
+        # if self._trace_viewer is not None and self._trace_viewer.isVisible():
+        self._trace_viewer.mark_instruction(insn_addr)
+
     def toggle_operand_selection(self, insn_addr, operand_idx):
         """
         Toggle the selection state of an operand of an instruction in the disassembly view.
@@ -318,6 +322,11 @@ class DisassemblyView(BaseView):
         else:
             self.current_graph.select_operand(insn_addr, operand_idx, unique=QApplication.keyboardModifiers() != Qt.ControlModifier)
             self.current_graph.show_instruction(insn_addr)
+
+    def show_trace(self):
+        self._trace_viewer.set_trace(self.workspace.instance.trace)
+        self._trace_viewer.show()
+        self.current_graph.refresh()
 
     def jump_to(self, addr, src_ins_addr=None):
 
@@ -403,17 +412,25 @@ class DisassemblyView(BaseView):
     def _init_widgets(self):
 
         self._linear_viewer = QLinearViewer(self.workspace, self)
+        self._trace_viewer = QTraceViewer(self.workspace, self)
         self._flow_graph = QDisasmGraph(self.workspace, self)
 
         self._statusbar = QDisasmStatusBar(self, parent=self)
 
-        hlayout = QVBoxLayout()
+        hlayout = QHBoxLayout()
         hlayout.addWidget(self._flow_graph)
         hlayout.addWidget(self._linear_viewer)
-        hlayout.addWidget(self._statusbar)
-        hlayout.setContentsMargins(0, 0, 0, 0)
+        hlayout.addWidget(self._trace_viewer)
 
-        self.setLayout(hlayout)
+
+        vlayout = QVBoxLayout()
+        vlayout.addLayout(hlayout)
+        vlayout.addWidget(self._statusbar)
+        vlayout.setContentsMargins(0, 0, 0, 0)
+
+        self.setLayout(vlayout)
+
+        self._trace_viewer.hide()
 
         self.display_disasm_graph()
         # self.display_linear_viewer()
