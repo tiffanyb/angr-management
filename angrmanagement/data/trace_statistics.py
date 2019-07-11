@@ -4,6 +4,8 @@ import logging
 import random
 from collections import defaultdict
 
+from angr.errors import SimEngineError
+
 l = logging.getLogger(name=__name__)
 l.setLevel('DEBUG')
 
@@ -15,7 +17,7 @@ class TraceStatistics:
     def __init__(self, workspace, trace):
         self.workspace = workspace
         self.trace = trace
-        self.trace_func = None
+        self.trace_func = list()
         self._statistics = None
         self._positions = None
         self._func_color = dict()
@@ -31,17 +33,27 @@ class TraceStatistics:
         self._statistics = defaultdict(int)
         self._positions = defaultdict(list)
 
-        for p, bbl_addr in enumerate(trace):
-            block = self.workspace.instance.project.factory.block(bbl_addr)
+        p = 0
+        for bbl_addr in trace:
+            try:
+                block = self.workspace.instance.project.factory.block(bbl_addr)
+            except SimEngineError:
+                continue
             ins_addrs = block.instruction_addrs
             for addr in ins_addrs:
                 self._statistics[addr] += 1
                 self._positions[addr].append(p)
 
-        self.trace_func = [(a, self._func_addr(a), self._func_name(a))
-             for a in trace]
+            func_address = self.workspace.instance.cfg.get_any_node(bbl_addr).function_address
+            func_name = self.workspace.instance.project.kb.functions[func_address].name
+            self.trace_func.append((bbl_addr, func_address, func_name))
+            p += 1
 
-        self.count = len(trace)
+        self.count = len(self.trace_func)
+        # self.trace_func = [(a, self._func_addr(a), self._func_name(a))
+             # for a in trace if
+             # self.workspace.instance.cfg.get_any_node(a) is not None]
+
 
     def _func_addr(self, a):
         return self.workspace.instance.cfg.get_any_node(a).function_address

@@ -94,7 +94,7 @@ class MainWindow(QMainWindow):
             self.load_file(file_to_open)
             self._file_menu.action_by_key('load_trace').enable()
 
-        self.load_file('/home/tiffanyb/Angr/test/hello')
+        self.load_file('/home/tiffanyb/Angr/test/hamlin.bin')
         self._file_menu.action_by_key('load_trace').enable()
         # import time; time.sleep(5)
         # self.load_trace('/home/tiffanyb/Angr/test/trace')
@@ -351,7 +351,7 @@ class MainWindow(QMainWindow):
     def open_trace(self):
         # trace_path = self._open_mainfile_dialog()
         # self.load_trace(trace_path)
-        self.load_trace('/home/tiffanyb/Angr/test/trace')
+        self.load_trace('/home/tiffanyb/Angr/test/trace_real')
 
     def load_file(self, file_path):
         if os.path.isfile(file_path):
@@ -386,7 +386,10 @@ class MainWindow(QMainWindow):
         if os.path.isfile(trace_path):
             with open(trace_path, 'r') as f:
                 trace = json.load(f)
-                trace = [0x4004e8, 0x4004fa, 0x40063a, 0x40064a, 0x40063a, 0x40063a, 0x400500]
+                # trace = [0x4004e8, 0x4004fa, 0x40063a, 0x40064a, 0x40063a, 0x40063a, 0x400500]
+                # trace = [0x407bc0, 0x407bea, 0x407c2f, 0x407a70,
+                        # 0x407a86, 0x407c37, 0x407c76, 0x407d60,
+                        # 0x407d65]
                 self._set_trace(trace)
 
     def _set_trace(self, trace):
