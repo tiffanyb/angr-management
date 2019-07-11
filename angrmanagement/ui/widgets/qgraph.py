@@ -16,8 +16,8 @@ class QZoomingGraphicsView(QGraphicsView):
     def __init__(self, parent):
         super(QZoomingGraphicsView, self).__init__(parent)
 
-    def sizeHint(self):
-        return QSize(300, 300)
+    # def sizeHint(self):
+    #    return QSize(300, 300)
 
     def wheelEvent(self, event):
         if event.modifiers() & Qt.ControlModifier == Qt.ControlModifier:

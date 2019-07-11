@@ -305,8 +305,9 @@ class DisassemblyView(BaseView):
             self.current_graph.select_instruction(insn_addr, unique=QApplication.keyboardModifiers() != Qt.ControlModifier)
             self.current_graph.show_instruction(insn_addr)
 
-        # if self._trace_viewer is not None and self._trace_viewer.isVisible():
-        self._trace_viewer.mark_instruction(insn_addr)
+        self._trace_viewer.selected_ins = insn_addr
+        if self._trace_viewer.isVisible():
+            self._trace_viewer.mark_instruction(insn_addr)
 
     def toggle_operand_selection(self, insn_addr, operand_idx):
         """

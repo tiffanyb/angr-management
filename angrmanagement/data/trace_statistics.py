@@ -8,6 +8,10 @@ l = logging.getLogger(name=__name__)
 l.setLevel('DEBUG')
 
 class TraceStatistics:
+
+    BBL_FILL_COLOR = QColor(00, 0xf0, 0xf0, 15)
+    BBL_BORDER_COLOR = QColor(00, 0xf0, 0xf0)
+
     def __init__(self, workspace, trace):
         self.workspace = workspace
         self.trace = trace
@@ -17,6 +21,8 @@ class TraceStatistics:
         self._func_color = dict()
         self.count = None
         self.statistics(trace)
+        self._mark_color = dict()
+
 
     def statistics(self, trace):
         """
@@ -56,11 +62,17 @@ class TraceStatistics:
     def get_func_color(self, func):
         if func in self._func_color:
             return self._func_color[func]
-        r = 30
-        g = 30
+        r = random.randint(0, 255)
+        g = random.randint(0, 255)
         b = random.randint(0, 255)
         self._func_color[func] = QColor(r, g, b)
         return QColor(r, g, b)
+
+    def set_mark_color(self, p, color):
+        self._mark_color[p] = color
+
+    def get_mark_color(self, addr, i):
+        return self._mark_color[self._get_position(addr, i)]
 
     def _get_position(self, addr, i):
         return self._positions[addr][i]

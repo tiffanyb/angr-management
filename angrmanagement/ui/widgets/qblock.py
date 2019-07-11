@@ -47,6 +47,8 @@ class QBlock(QGraphObject):
         self.addr_to_insns = { }
         self.addr_to_labels = { }
 
+        self._fill_color = self._config.disasm_view_node_background_color
+        self._border_color = self._config.disasm_view_node_border_color
         self._init_widgets()
 
     #
@@ -71,6 +73,8 @@ class QBlock(QGraphObject):
 
     def refresh(self):
         super(QBlock, self).refresh()
+
+        self._update_appearance()
 
         for obj in self.objects:
             obj.refresh()
@@ -106,7 +110,8 @@ class QBlock(QGraphObject):
         if self.mode == 'linear':
             self._paint_linear(painter)
         else:
-            self._paint_graph(painter)
+            self._paint_graph(painter, self._fill_color,
+                    self._border_color)
 
     #
     # Event handlers
@@ -161,10 +166,20 @@ class QBlock(QGraphObject):
                     self.objects.append(variable)
 
         self._update_size()
+        self._update_appearance()
 
     #
     # Private methods
     #
+
+    def _update_appearance(self):
+        if self.workspace.instance.trace is not None \
+                and self.workspace.instance.trace.get_count(self.addr) > 0:
+            self._fill_color = self.workspace.instance.trace.BBL_FILL_COLOR
+            self._border_color = self.workspace.instance.trace.BBL_BORDER_COLOR
+        else:
+            self._fill_color = self._config.disasm_view_node_background_color
+            self._border_color = self._config.disasm_view_node_border_color
 
     def _update_size(self):
 
@@ -183,11 +198,11 @@ class QBlock(QGraphObject):
         if self.mode == "graph":
             self._width += self.GRAPH_LEFT_PADDING
 
-    def _paint_graph(self, painter):
+    def _paint_graph(self, painter, fill_color, border_color):
 
         # background of the node
-        painter.setBrush(self._config.disasm_view_node_background_color)
-        painter.setPen(QPen(self._config.disasm_view_node_border_color, 1.5))
+        painter.setBrush(fill_color)
+        painter.setPen(QPen(border_color, 1.5))
         painter.drawRect(self.x, self.y, self.width, self.height)
 
         # content

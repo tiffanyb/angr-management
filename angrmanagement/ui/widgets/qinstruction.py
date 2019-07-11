@@ -257,7 +257,7 @@ class QInstruction(QGraphObject):
                             [(i, width) for i in range(remainder, count)]
 
                 for (i, w) in i_width:
-                    color = self.workspace.instance.trace.get_color(self.insn.addr, i)
+                    color = self.workspace.instance.trace.get_mark_color(self.insn.addr, i)
                     painter.setPen(color)
                     painter.setBrush(color)
                     painter.drawRect(x_start, self.y, w, 30)

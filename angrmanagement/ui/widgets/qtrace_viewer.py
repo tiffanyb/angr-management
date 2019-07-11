@@ -1,8 +1,8 @@
 from PySide2.QtWidgets import QWidget, QHBoxLayout, QGraphicsScene, \
         QGraphicsView, QGraphicsItemGroup
 from PySide2.QtGui import QPen, QBrush, QLinearGradient, QPixmap, \
-        QColor
-from PySide2.QtCore import Qt
+        QColor, QPainter
+from PySide2.QtCore import Qt, QRectF, QSize
 
 import logging
 l = logging.getLogger(name=__name__)
@@ -17,6 +17,7 @@ class QTraceViewer(QWidget):
         self.scene = None
         self._trace_stat = None
         self.mark = None
+        self.selected_ins = None
         self._init_widgets()
 
         self.LEGEND_X = -50
@@ -32,6 +33,7 @@ class QTraceViewer(QWidget):
         self.MARK_WIDTH = self.TRACE_FUNC_X - self.LEGEND_X + self.TRACE_FUNC_WIDTH
         self.MARK_HEIGHT = 5
 
+        self.setFixedWidth(500)
 
     def _init_widgets(self):
         self.view = QGraphicsView()
@@ -39,10 +41,10 @@ class QTraceViewer(QWidget):
         self.view.setScene(self.scene)
 
         self.trace_func = QGraphicsItemGroup()
-        self.legend = QGraphicsItemGroup()
-
-        self.scene.addItem(self.legend)
         self.scene.addItem(self.trace_func)
+
+        self.legend = None
+
 
 
         layout = QHBoxLayout()
@@ -52,8 +54,10 @@ class QTraceViewer(QWidget):
         self.setLayout(layout)
 
     def _show_legend(self):
-        pen = QPen()
-        gradient = QLinearGradient(-50, 0, -50, 300)
+        pen = QPen(Qt.transparent)
+
+        gradient = QLinearGradient(self.LEGEND_X, self.LEGEND_Y,
+                self.LEGEND_X, self.LEGEND_Y + self.height)
         gradient.setColorAt(0.0, Qt.red)
         gradient.setColorAt(0.4, Qt.yellow)
         gradient.setColorAt(0.6, Qt.green)
@@ -61,8 +65,7 @@ class QTraceViewer(QWidget):
         brush = QBrush(gradient)
 
         self.legend = self.scene.addRect(self.LEGEND_X, self.LEGEND_Y,
-                self.LEGEND_WIDTH, self.height,
-            QPen(), brush)
+                self.LEGEND_WIDTH, self.height, pen, brush)
         # qPix = QPixmap.grabWidget(self.scene)
         """
         qPix = QWidget.grab(self.scene.activeWindow())
@@ -81,6 +84,7 @@ class QTraceViewer(QWidget):
         """
 
     def mark_instruction(self, addr):
+        self.selected_ins = addr
         if self.mark is not None:
             self.scene.removeItem(self.mark)
         self.mark = QGraphicsItemGroup()
@@ -94,12 +98,24 @@ class QTraceViewer(QWidget):
                     self.MARK_HEIGHT, QPen(color), QBrush(color)))
 
     def _get_mark_color(self, i, total):
-        # TODO: change color
-        return QColor(10, 10, 10)
+        return self.legend_img.pixelColor(self.LEGEND_WIDTH / 2,
+                self.height * i / total + 1)
 
     def _get_mark_y(self, i, total):
         # TODO: change trace_func_height
         return self.TRACE_FUNC_Y + self.TRACE_FUNC_HEIGHT * i
+
+    def _graphicsitem_to_pixmap(self, graph):
+        if graph.scene() is not None:
+            r = graph.boundingRect()
+            pixmap = QPixmap(r.width(), r.height())
+            pixmap.fill(QColor(0, 0, 0, 0));
+            painter = QPainter(pixmap)
+            painter.drawRect(r)
+            graph.scene().render(painter, QRectF(), graph.sceneBoundingRect())
+            return pixmap
+        else:
+            return None
 
     def _show_trace_func(self):
         x = 0
@@ -125,7 +141,17 @@ class QTraceViewer(QWidget):
         self.height = y
 
 
+    def _set_mark_color(self):
+        pixmap = self._graphicsitem_to_pixmap(self.legend)
+        self.legend_img = pixmap.toImage()
+        for p in range(self._trace_stat.count):
+            color = self._get_mark_color(p, self._trace_stat.count)
+            self._trace_stat.set_mark_color(p, color)
+
     def set_trace(self, trace):
         self._trace_stat = trace
         self._show_trace_func()
         self._show_legend()
+        self._set_mark_color()
+        if self.selected_ins is not None:
+            self.mark_instruction(self.selected_ins)

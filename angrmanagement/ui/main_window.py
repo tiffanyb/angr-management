@@ -386,7 +386,7 @@ class MainWindow(QMainWindow):
         if os.path.isfile(trace_path):
             with open(trace_path, 'r') as f:
                 trace = json.load(f)
-                trace = [0x40063a, 0x40064a, 0x40063a, 0x40063a, 0x400500]
+                trace = [0x4004e8, 0x4004fa, 0x40063a, 0x40064a, 0x40063a, 0x40063a, 0x400500]
                 self._set_trace(trace)
 
     def _set_trace(self, trace):
