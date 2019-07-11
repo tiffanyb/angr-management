@@ -110,7 +110,7 @@ class QTraceViewer(QWidget):
                 self.TRACE_FUNC_WIDTH, self.trace_func_unit_height,
                 QPen(color), QBrush(color)))
             if show_func_tag is True and name != prev_name:
-                tag = self.scene.addText(name, QFont('Times', 5))
+                tag = self.scene.addText(name, QFont('Times', 7))
                 tag.setPos(x + self.TRACE_FUNC_WIDTH +
                         self.TAG_SPACING, y - tag.boundingRect().height() / 2)
                 self.trace_func.addToGroup(tag)
@@ -133,9 +133,9 @@ class QTraceViewer(QWidget):
         self._trace_stat = trace
         l.debug('minheight: %d, count: %d', self.TRACE_FUNC_MINHEIGHT,
                 self._trace_stat.count)
-        if self.TRACE_FUNC_MINHEIGHT < self._trace_stat.count * 2:
-            self.trace_func_unit_height = 2
-            show_func_tag = False
+        if self.TRACE_FUNC_MINHEIGHT < self._trace_stat.count * 15:
+            self.trace_func_unit_height = 15
+            show_func_tag = True
         else:
             self.trace_func_unit_height = self.TRACE_FUNC_MINHEIGHT / self._trace_stat.count
             show_func_tag = True
