@@ -8,6 +8,7 @@ import logging
 l = logging.getLogger(name=__name__)
 l.setLevel('DEBUG')
 class QTraceViewer(QWidget):
+    TAG_SPACING = 50
     def __init__(self, workspace, disasm_view, parent=None):
         super().__init__(parent)
         self.workspace = workspace
@@ -27,13 +28,12 @@ class QTraceViewer(QWidget):
         self.TRACE_FUNC_X = 0
         self.TRACE_FUNC_Y = 0
         self.TRACE_FUNC_WIDTH = 50
-        self.TRACE_FUNC_HEIGHT = 100
+        self.TRACE_FUNC_HEIGHT = 1000
 
         self.MARK_X = self.LEGEND_X
         self.MARK_WIDTH = self.TRACE_FUNC_X - self.LEGEND_X + self.TRACE_FUNC_WIDTH
         self.MARK_HEIGHT = 5
 
-        self.setFixedWidth(500)
 
     def _init_widgets(self):
         self.view = QGraphicsView()
@@ -45,13 +45,12 @@ class QTraceViewer(QWidget):
 
         self.legend = None
 
-
-
         layout = QHBoxLayout()
         layout.addWidget(self.view)
         layout.setContentsMargins(0, 0, 0, 0)
 
         self.setLayout(layout)
+        self.setFixedWidth(500)
 
     def _show_legend(self):
         pen = QPen(Qt.transparent)
@@ -66,22 +65,6 @@ class QTraceViewer(QWidget):
 
         self.legend = self.scene.addRect(self.LEGEND_X, self.LEGEND_Y,
                 self.LEGEND_WIDTH, self.height, pen, brush)
-        # qPix = QPixmap.grabWidget(self.scene)
-        """
-        qPix = QWidget.grab(self.scene.activeWindow())
-        self.legend_img = qPix.toImage()
-        l.debug('Image height: %d', self.legend_img.height())
-        if self.legend_img.save('/tmp/a.png',
-                'png'):
-            l.debug('save')
-        else:
-            l.debug('save unsuccessfully')
-        color = QColor(self.legend_img.pixel(25, 20))
-
-        self.scene.addRect(self.LEGEND_X, 20, self.FUNC_TRACE_X - , 5, pen, QBrush(color))
-        (r, g, b) = color.red(), color.green(), color.blue()
-        l.debug('R: %d, G: %d, B: %d', r, g, b)
-        """
 
     def mark_instruction(self, addr):
         self.selected_ins = addr
@@ -103,7 +86,7 @@ class QTraceViewer(QWidget):
 
     def _get_mark_y(self, i, total):
         # TODO: change trace_func_height
-        return self.TRACE_FUNC_Y + self.TRACE_FUNC_HEIGHT * i
+        return self.TRACE_FUNC_Y + self.trace_func_unit_height * i
 
     def _graphicsitem_to_pixmap(self, graph):
         if graph.scene() is not None:
@@ -118,26 +101,26 @@ class QTraceViewer(QWidget):
             return None
 
     def _show_trace_func(self):
-        x = 0
-        y = 0
+        x = self.TRACE_FUNC_X
+        y = self.TRACE_FUNC_Y
         prev_name = None
         for (bbl, func, name) in self._trace_stat.trace_func:
             l.debug('Draw function %x %s' % (func, name))
             color = self._trace_stat.get_func_color(func)
             self.trace_func.addToGroup( self.scene.addRect(x, y,
-                self.TRACE_FUNC_WIDTH, self.TRACE_FUNC_HEIGHT,
+                self.TRACE_FUNC_WIDTH, self.trace_func_unit_height,
                 QPen(color), QBrush(color)))
             if name != prev_name:
                 tag = self.scene.addText(name)
-                tag.setPos(x + 100, y - tag.boundingRect().height() / 2)
+                tag.setPos(x + self.TRACE_FUNC_WIDTH +
+                        self.TAG_SPACING, y - tag.boundingRect().height() / 2)
                 self.trace_func.addToGroup(tag)
                 anchor = self.scene.addLine(
-                        self.TRACE_FUNC_X + self.TRACE_FUNC_WIDTH, y +
-                        5,
-                        x+100, y + 5)
+                        self.TRACE_FUNC_X + self.TRACE_FUNC_WIDTH, y,
+                        x + self.TRACE_FUNC_WIDTH + self.TAG_SPACING, y)
                 self.trace_func.addToGroup(anchor)
                 prev_name = name
-            y += 100
+            y += self.trace_func_unit_height
         self.height = y
 
 
@@ -150,6 +133,7 @@ class QTraceViewer(QWidget):
 
     def set_trace(self, trace):
         self._trace_stat = trace
+        self.trace_func_unit_height = self.TRACE_FUNC_HEIGHT / self._trace_stat.count
         self._show_trace_func()
         self._show_legend()
         self._set_mark_color()
