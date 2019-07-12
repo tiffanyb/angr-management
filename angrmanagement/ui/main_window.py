@@ -94,7 +94,7 @@ class MainWindow(QMainWindow):
             self.load_file(file_to_open)
             self._file_menu.action_by_key('load_trace').enable()
 
-        self.load_file('/home/tiffanyb/Angr/test/hamlin.bin')
+        # self.load_file('/home/tiffanyb/Angr/test/hamlin.bin')
         self._file_menu.action_by_key('load_trace').enable()
         # import time; time.sleep(5)
         # self.load_trace('/home/tiffanyb/Angr/test/trace')
@@ -141,6 +141,12 @@ class MainWindow(QMainWindow):
     def _open_mainfile_dialog(self):
         file_path, _ = QFileDialog.getOpenFileName(self, "Open a binary", ".",
                                                    "All executables (*);;Windows PE files (*.exe);;Core Dumps (*.core);;angr database (*.adb)",
+                                                   )
+        return file_path
+
+    def _open_trace_dialog(self):
+        file_path, _ = QFileDialog.getOpenFileName(self, "Open a trace", ".",
+                                                   "json (*.json)",
                                                    )
         return file_path
 
@@ -349,9 +355,9 @@ class MainWindow(QMainWindow):
         self.load_image(img_name)
 
     def open_trace(self):
-        # trace_path = self._open_mainfile_dialog()
-        # self.load_trace(trace_path)
-        self.load_trace('/home/tiffanyb/Angr/test/trace_real')
+        trace_path = self._open_trace_dialog()
+        self.load_trace(trace_path)
+        # self.load_trace('/home/tiffanyb/Angr/test/trace_real')
 
     def load_file(self, file_path):
         if os.path.isfile(file_path):
