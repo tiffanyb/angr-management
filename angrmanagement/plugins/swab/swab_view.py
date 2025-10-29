@@ -345,6 +345,10 @@ class SWABView(InstanceView):
         self.run_shortcut = QShortcut(QKeySequence("Ctrl+Return"), self.right_panel)
         self.run_shortcut.activated.connect(self._on_run_clicked)
 
+        # Add keyboard shortcut: Cmd+S (or Ctrl+S on non-Mac) to save file
+        self.save_shortcut = QShortcut(QKeySequence.StandardKey.Save, self.right_panel)
+        self.save_shortcut.activated.connect(self._on_save_clicked)
+
         # Add file tree and code editor to IDE splitter
         ide_splitter.addWidget(self.file_tree_container)
         ide_splitter.addWidget(self.right_panel)
