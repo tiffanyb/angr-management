@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from pyqodeng.core.api import CodeEdit
 from pyqodeng.core.modes import AutoIndentMode, CaretLineHighlighterMode, PygmentsSyntaxHighlighter
+from pyqodeng.core.panels import LineNumberPanel
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont, QKeySequence, QShortcut, QTextOption
 from PySide6.QtWidgets import (
@@ -320,6 +321,9 @@ class SWABView(InstanceView):
         self.right_panel = CodeEdit()
         self.right_panel.use_spaces_instead_of_tabs = True
         self.right_panel.tab_length = 4
+
+        # Add line number panel
+        self.right_panel.panels.append(LineNumberPanel())
 
         # Add syntax highlighting for Python (before setting font)
         self.right_panel.modes.append(CaretLineHighlighterMode())
