@@ -67,11 +67,7 @@ class SWABView(InstanceView):
         self.right_panel.use_spaces_instead_of_tabs = True
         self.right_panel.tab_length = 4
 
-        # Set larger font for code editor
-        code_font = QFont("Courier New", 14)  # Increased font size to 14pt
-        self.right_panel.setFont(code_font)
-
-        # Add syntax highlighting for Python
+        # Add syntax highlighting for Python (before setting font)
         self.right_panel.modes.append(CaretLineHighlighterMode())
         self.right_panel.modes.append(PygmentsSyntaxHighlighter(self.right_panel.document()))
         self.right_panel.modes.append(AutoIndentMode())
@@ -81,6 +77,15 @@ class SWABView(InstanceView):
 
         # Set initial Python code
         self.right_panel.setPlainText("# Enter your Python code here\nprint('Hello from SWAB!')", "text/x-python", "utf-8")
+
+        # Set larger font for code editor AFTER setting text and modes
+        # This ensures the font isn't overridden by other initialization
+        code_font = QFont("Monospace", 14)
+        code_font.setStyleHint(QFont.StyleHint.Monospace)
+        self.right_panel.setFont(code_font)
+
+        # Also set the font size using the zoom functionality as backup
+        self.right_panel.zoom_in(3)  # Increase zoom level
 
         # Add keyboard shortcut: Cmd+Enter (or Ctrl+Enter on non-Mac) to run code
         self.run_shortcut = QShortcut(QKeySequence("Ctrl+Return"), self.right_panel)
