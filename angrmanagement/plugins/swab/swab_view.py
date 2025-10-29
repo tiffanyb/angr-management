@@ -3,7 +3,10 @@ from __future__ import annotations
 import subprocess
 from typing import TYPE_CHECKING
 
+from pyqodeng.core.api import CodeEdit
+from pyqodeng.core.modes import AutoIndentMode, CaretLineHighlighterMode, PygmentsSyntaxHighlighter
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QFont, QKeySequence, QShortcut, QTextOption
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QPushButton,
@@ -43,8 +46,8 @@ class SWABView(InstanceView):
         # Left panel - non-editable text
         self.left_panel = QTextEdit()
         self.left_panel.setReadOnly(True)
-        self.left_panel.setPlaceholderText("Non-editable text panel")
-        self.left_panel.setText("Welcome to SWAB!\n\nThis panel displays output and information.")
+        self.left_panel.setPlaceholderText("Output will appear here...")
+        self.left_panel.setText("Welcome to SWAB!\n\nWrite Python code in the right panel and click Run.")
 
         # Right panel container
         right_container = QWidget()
@@ -59,10 +62,30 @@ class SWABView(InstanceView):
         button_layout.addWidget(self.run_button)
         right_layout.addLayout(button_layout)
 
-        # Right panel - editable code area
-        self.right_panel = QTextEdit()
-        self.right_panel.setPlaceholderText("Write your code here...")
-        self.right_panel.setText("# Enter your code here\necho 1")
+        # Right panel - editable Python code editor with syntax highlighting
+        self.right_panel = CodeEdit()
+        self.right_panel.use_spaces_instead_of_tabs = True
+        self.right_panel.tab_length = 4
+
+        # Set larger font for code editor
+        code_font = QFont("Courier New", 14)  # Increased font size to 14pt
+        self.right_panel.setFont(code_font)
+
+        # Add syntax highlighting for Python
+        self.right_panel.modes.append(CaretLineHighlighterMode())
+        self.right_panel.modes.append(PygmentsSyntaxHighlighter(self.right_panel.document()))
+        self.right_panel.modes.append(AutoIndentMode())
+
+        # Set word wrap mode
+        self.right_panel.setWordWrapMode(QTextOption.WrapMode.WordWrap)
+
+        # Set initial Python code
+        self.right_panel.setPlainText("# Enter your Python code here\nprint('Hello from SWAB!')", "text/x-python", "utf-8")
+
+        # Add keyboard shortcut: Cmd+Enter (or Ctrl+Enter on non-Mac) to run code
+        self.run_shortcut = QShortcut(QKeySequence("Ctrl+Return"), self.right_panel)
+        self.run_shortcut.activated.connect(self._on_run_clicked)
+
         right_layout.addWidget(self.right_panel)
 
         right_container.setLayout(right_layout)
@@ -78,26 +101,25 @@ class SWABView(InstanceView):
         self.setLayout(main_layout)
 
     def _on_run_clicked(self) -> None:
-        """Handle run button click - execute the command from the right panel."""
-        # Get the code/command from the right panel
+        """Handle run button click - execute the Python code from the right panel."""
+        # Get the Python code from the right panel
         code = self.right_panel.toPlainText().strip()
 
         if not code:
-            self.left_panel.setText("Error: No command entered")
+            self.left_panel.setText("Error: No code entered")
             return
 
         try:
-            # Execute the command using shell to support complex commands
+            # Execute the Python code using subprocess to capture output
             result = subprocess.run(
-                code,
-                shell=True,
+                ["python3", "-c", code],
                 capture_output=True,
                 text=True,
                 timeout=10,
             )
 
             # Display the output in the left panel
-            output = f"Command executed: {code}\n"
+            output = f"Python Code Executed\n"
             output += f"{'=' * 60}\n"
             output += f"Return code: {result.returncode}\n\n"
 
@@ -110,9 +132,9 @@ class SWABView(InstanceView):
             self.left_panel.setText(output)
 
         except subprocess.TimeoutExpired:
-            self.left_panel.setText(f"Error: Command timed out after 10 seconds\n\nCommand: {code}")
+            self.left_panel.setText(f"Error: Code execution timed out after 10 seconds\n\nCode:\n{code}")
         except Exception as e:
-            self.left_panel.setText(f"Error executing command: {e}\n\nCommand: {code}")
+            self.left_panel.setText(f"Error executing code: {e}\n\nCode:\n{code}")
 
     def reload(self) -> None:
         """Reload the view."""
