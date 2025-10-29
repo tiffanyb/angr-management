@@ -8,8 +8,14 @@ from pyqodeng.core.modes import AutoIndentMode, CaretLineHighlighterMode, Pygmen
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont, QKeySequence, QShortcut, QTextOption
 from PySide6.QtWidgets import (
+    QDialog,
+    QDialogButtonBox,
+    QFileDialog,
     QFileSystemModel,
+    QFormLayout,
     QHBoxLayout,
+    QLabel,
+    QLineEdit,
     QPushButton,
     QSplitter,
     QTextEdit,
@@ -24,6 +30,116 @@ from angrmanagement.ui.views.view import InstanceView
 if TYPE_CHECKING:
     from angrmanagement.data.instance import Instance
     from angrmanagement.ui.workspace import Workspace
+
+
+class CreateProjectDialog(QDialog):
+    """Dialog for creating a new project folder."""
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Create New Project")
+        self.setMinimumWidth(500)
+
+        self.project_name = None
+        self.project_path = None
+
+        self._init_ui()
+
+    def _init_ui(self) -> None:
+        layout = QVBoxLayout()
+
+        # Form layout for project details
+        form_layout = QFormLayout()
+
+        # Project name input
+        self.name_input = QLineEdit()
+        self.name_input.setPlaceholderText("my_project")
+        form_layout.addRow("Project Name:", self.name_input)
+
+        # Project location input with browse button
+        location_layout = QHBoxLayout()
+        self.location_input = QLineEdit()
+        import os
+        self.location_input.setText(os.path.expanduser("~"))
+        location_layout.addWidget(self.location_input)
+
+        browse_button = QPushButton("Browse...")
+        browse_button.clicked.connect(self._browse_location)
+        location_layout.addWidget(browse_button)
+
+        form_layout.addRow("Location:", location_layout)
+
+        # Full path display
+        self.full_path_label = QLabel()
+        self.full_path_label.setStyleSheet("color: gray;")
+        self._update_full_path()
+        form_layout.addRow("Full Path:", self.full_path_label)
+
+        layout.addLayout(form_layout)
+
+        # Connect signals to update full path
+        self.name_input.textChanged.connect(self._update_full_path)
+        self.location_input.textChanged.connect(self._update_full_path)
+
+        # Dialog buttons
+        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        button_box.accepted.connect(self._accept_dialog)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
+
+        self.setLayout(layout)
+
+    def _browse_location(self) -> None:
+        """Open file dialog to select project location."""
+        directory = QFileDialog.getExistingDirectory(self, "Select Project Location", self.location_input.text())
+        if directory:
+            self.location_input.setText(directory)
+
+    def _update_full_path(self) -> None:
+        """Update the full path label based on location and name."""
+        import os
+        location = self.location_input.text()
+        name = self.name_input.text()
+        if location and name:
+            full_path = os.path.join(location, name)
+            self.full_path_label.setText(full_path)
+        else:
+            self.full_path_label.setText("")
+
+    def _accept_dialog(self) -> None:
+        """Validate and accept the dialog."""
+        import os
+
+        name = self.name_input.text().strip()
+        location = self.location_input.text().strip()
+
+        if not name:
+            # Show error - project name required
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "Invalid Input", "Please enter a project name.")
+            return
+
+        if not location:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "Invalid Input", "Please select a project location.")
+            return
+
+        self.project_name = name
+        self.project_path = os.path.join(location, name)
+
+        # Check if directory already exists
+        if os.path.exists(self.project_path):
+            from PySide6.QtWidgets import QMessageBox
+            reply = QMessageBox.question(
+                self,
+                "Directory Exists",
+                f"The directory '{self.project_path}' already exists. Use it anyway?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
+            if reply == QMessageBox.StandardButton.No:
+                return
+
+        self.accept()
 
 
 class SWABView(InstanceView):
@@ -71,6 +187,13 @@ class SWABView(InstanceView):
         button_layout.addWidget(self.toggle_tree_button)
 
         button_layout.addStretch()
+
+        # Create button
+        self.create_button = QPushButton("Create")
+        self.create_button.clicked.connect(self._on_create_clicked)
+        button_layout.addWidget(self.create_button)
+
+        # Run button
         self.run_button = QPushButton("Run")
         self.run_button.clicked.connect(self._on_run_clicked)
         button_layout.addWidget(self.run_button)
@@ -156,6 +279,61 @@ class SWABView(InstanceView):
         """Toggle the visibility of the file tree panel."""
         is_visible = self.file_tree_container.isVisible()
         self.file_tree_container.setVisible(not is_visible)
+
+    def _on_create_clicked(self) -> None:
+        """Handle Create button click - show dialog to create new project."""
+        dialog = CreateProjectDialog(self)
+        if dialog.exec_() == QDialog.DialogCode.Accepted:
+            import os
+
+            project_path = dialog.project_path
+            project_name = dialog.project_name
+
+            try:
+                # Create the project directory if it doesn't exist
+                if not os.path.exists(project_path):
+                    os.makedirs(project_path)
+
+                # Create a basic project structure
+                # Create main.py with template code
+                main_py_path = os.path.join(project_path, "main.py")
+                if not os.path.exists(main_py_path):
+                    with open(main_py_path, "w", encoding="utf-8") as f:
+                        f.write(f'"""\n{project_name} - Main entry point\n"""\n\n')
+                        f.write('def main():\n')
+                        f.write('    print("Hello from {}!")\n\n'.format(project_name))
+                        f.write('if __name__ == "__main__":\n')
+                        f.write('    main()\n')
+
+                # Create README.md
+                readme_path = os.path.join(project_path, "README.md")
+                if not os.path.exists(readme_path):
+                    with open(readme_path, "w", encoding="utf-8") as f:
+                        f.write(f"# {project_name}\n\n")
+                        f.write("A Python project created with SWAB.\n")
+
+                # Update file tree to show the new project
+                self.file_tree.setRootIndex(self.file_model.index(project_path))
+
+                # Load main.py into editor
+                with open(main_py_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+                self.right_panel.setPlainText(content, "text/x-python", "utf-8")
+                self.current_file_path = main_py_path
+
+                # Update output panel
+                self.left_panel.setText(
+                    f"Project created successfully!\n\n"
+                    f"Name: {project_name}\n"
+                    f"Location: {project_path}\n\n"
+                    f"Files created:\n"
+                    f"  - main.py (loaded in editor)\n"
+                    f"  - README.md\n"
+                )
+
+            except Exception as e:
+                from PySide6.QtWidgets import QMessageBox
+                QMessageBox.critical(self, "Error Creating Project", f"Failed to create project:\n{e}")
 
     def _on_file_double_clicked(self, index) -> None:
         """Handle double-click on file in the tree - load file content into editor."""
