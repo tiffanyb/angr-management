@@ -131,14 +131,12 @@ class CreateProjectDialog(QDialog):
         # Check if directory already exists
         if os.path.exists(self.project_path):
             from PySide6.QtWidgets import QMessageBox
-            reply = QMessageBox.question(
+            QMessageBox.warning(
                 self,
                 "Directory Exists",
-                f"The directory '{self.project_path}' already exists. Use it anyway?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                f"The directory '{self.project_path}' already exists.\nPlease choose a different project name or location."
             )
-            if reply == QMessageBox.StandardButton.No:
-                return
+            return
 
         self.accept()
 
@@ -251,6 +249,12 @@ class SWABView(InstanceView):
 
         button_layout.addStretch()
 
+        # Open button
+        self.open_button = QPushButton("Open")
+        self.open_button.clicked.connect(self._on_open_clicked)
+        self.open_button.setToolTip("Open an existing project folder")
+        button_layout.addWidget(self.open_button)
+
         # Create button
         self.create_button = QPushButton("Create")
         self.create_button.clicked.connect(self._on_create_clicked)
@@ -349,6 +353,96 @@ class SWABView(InstanceView):
         """Toggle the visibility of the file tree panel."""
         is_visible = self.file_tree_container.isVisible()
         self.file_tree_container.setVisible(not is_visible)
+
+    def _on_open_clicked(self) -> None:
+        """Handle Open button click - open an existing project folder."""
+        from PySide6.QtWidgets import QFileDialog, QMessageBox
+
+        # Open file dialog to select a folder
+        project_path = QFileDialog.getExistingDirectory(
+            self,
+            "Open Project Folder",
+            os.path.expanduser("~"),
+            QFileDialog.Option.ShowDirsOnly
+        )
+
+        if not project_path:
+            return  # User cancelled
+
+        try:
+            # Check if the directory exists
+            if not os.path.exists(project_path):
+                QMessageBox.warning(self, "Invalid Path", "The selected directory does not exist.")
+                return
+
+            # Set this as the current project
+            self.current_project_path = project_path
+            project_name = os.path.basename(project_path)
+
+            # Update file tree to show the project folder
+            self.file_tree.setRootIndex(self.file_model.index(project_path))
+
+            # Enable Configure button since we have a project open
+            self.configure_button.setEnabled(True)
+            self.configure_button.setToolTip("Configure project simulation engines")
+
+            # Look for common entry point files to load
+            entry_files = ["main.py", "app.py", "__main__.py", "README.md"]
+            loaded_file = None
+
+            for filename in entry_files:
+                file_path = os.path.join(project_path, filename)
+                if os.path.exists(file_path):
+                    try:
+                        with open(file_path, "r", encoding="utf-8") as f:
+                            content = f.read()
+
+                        # Detect file type for syntax highlighting
+                        mime_type = "text/plain"
+                        if file_path.endswith(".py"):
+                            mime_type = "text/x-python"
+                        elif file_path.endswith(".md"):
+                            mime_type = "text/markdown"
+
+                        self.right_panel.setPlainText(content, mime_type, "utf-8")
+                        self.current_file_path = file_path
+                        loaded_file = filename
+                        break
+                    except Exception:
+                        continue
+
+            # Update output panel
+            output = f"Project opened successfully!\n\n"
+            output += f"Name: {project_name}\n"
+            output += f"Location: {project_path}\n\n"
+
+            if loaded_file:
+                output += f"Loaded file: {loaded_file}\n\n"
+            else:
+                output += "No entry point file found (main.py, app.py, etc.)\n"
+                output += "Double-click any file in the tree to open it.\n\n"
+
+            # Check if project is configured
+            config_path = os.path.join(project_path, "configuration.toml")
+            if os.path.exists(config_path):
+                output += "✓ Project is configured\n"
+                # Parse configuration to show engines
+                try:
+                    with open(config_path, "r", encoding="utf-8") as f:
+                        config_content = f.read()
+                        import re
+                        engine_matches = re.findall(r'\[engines\.(\w+)\]', config_content)
+                        if engine_matches:
+                            output += f"Engines: {', '.join(engine_matches)}\n"
+                except Exception:
+                    pass
+            else:
+                output += "Click 'Configure' to add simulation engines.\n"
+
+            self.left_panel.setText(output)
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error Opening Project", f"Failed to open project:\n{e}")
 
     def _on_create_clicked(self) -> None:
         """Handle Create button click - show dialog to create new project."""
