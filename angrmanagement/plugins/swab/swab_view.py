@@ -777,6 +777,12 @@ class SWABView(InstanceView):
                     os.makedirs(engine_path)
                     created_folders.append(engine)
 
+                # Create engine.toml file in the engine folder
+                engine_toml_path = os.path.join(engine_path, "engine.toml")
+                with open(engine_toml_path, "w", encoding="utf-8") as f:
+                    f.write("[engine]\n")
+                    f.write('base = ""\n')
+
             # Create configuration.toml file
             with open(config_path, "w", encoding="utf-8") as f:
                 f.write("# Project Configuration\n\n")
