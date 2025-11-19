@@ -11,6 +11,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont, QKeySequence, QShortcut, QTextOption
 from PySide6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QDialog,
     QDialogButtonBox,
     QFileDialog,
@@ -278,11 +279,27 @@ class SWABView(InstanceView):
         self.save_button.setToolTip("Save current file")
         button_layout.addWidget(self.save_button)
 
+        # Docker image dropdown
+        self.docker_image_dropdown = QComboBox()
+        self.docker_image_dropdown.setToolTip("Select Docker image")
+        self.docker_image_dropdown.setMinimumWidth(200)
+        button_layout.addWidget(self.docker_image_dropdown)
+
+        # Refresh docker images button
+        self.refresh_docker_button = QPushButton("🔄")
+        self.refresh_docker_button.setToolTip("Refresh Docker images")
+        self.refresh_docker_button.setMaximumWidth(40)
+        self.refresh_docker_button.clicked.connect(self._refresh_docker_images)
+        button_layout.addWidget(self.refresh_docker_button)
+
         # Run button
         self.run_button = QPushButton("Run")
         self.run_button.clicked.connect(self._on_run_clicked)
         button_layout.addWidget(self.run_button)
         right_layout.addLayout(button_layout)
+
+        # Load docker images initially
+        self._refresh_docker_images()
 
         # Create IDE-like layout with file tree and code editor
         ide_splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -877,31 +894,95 @@ class SWABView(InstanceView):
         from datetime import datetime
         return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    def _on_run_clicked(self) -> None:
-        """Handle run button click - execute the Python code from the right panel."""
-        # Get the Python code from the right panel
-        code = self.right_panel.toPlainText().strip()
-
-        if not code:
-            self.left_panel.setText("Error: No code entered")
-            return
-
+    def _refresh_docker_images(self) -> None:
+        """Refresh the docker images dropdown."""
         try:
-            # Execute the Python code using subprocess to capture output
+            # Get list of docker images
             result = subprocess.run(
-                ["python3", "-c", code],
+                ["docker", "images", "--format", "{{.Repository}}:{{.Tag}}"],
                 capture_output=True,
                 text=True,
-                timeout=10,
+                timeout=5,
+            )
+
+            if result.returncode == 0:
+                # Parse the output to get image names
+                images = [line.strip() for line in result.stdout.strip().split("\n") if line.strip()]
+
+                # Update dropdown
+                self.docker_image_dropdown.clear()
+                if images:
+                    self.docker_image_dropdown.addItems(images)
+                else:
+                    self.docker_image_dropdown.addItem("No images found")
+
+            else:
+                self.docker_image_dropdown.clear()
+                self.docker_image_dropdown.addItem("Docker not available")
+                self.left_panel.setText(f"Error: Could not list Docker images\n\n{result.stderr}")
+
+        except FileNotFoundError:
+            self.docker_image_dropdown.clear()
+            self.docker_image_dropdown.addItem("Docker not installed")
+        except subprocess.TimeoutExpired:
+            self.docker_image_dropdown.clear()
+            self.docker_image_dropdown.addItem("Docker timeout")
+        except Exception as e:
+            self.docker_image_dropdown.clear()
+            self.docker_image_dropdown.addItem("Error")
+            self.left_panel.setText(f"Error refreshing Docker images: {e}")
+
+    def _on_run_clicked(self) -> None:
+        """Handle run button click - show dialog to get command and execute with Docker."""
+        # Get selected docker image
+        selected_image = self.docker_image_dropdown.currentText()
+
+        # Check if docker is available
+        if not selected_image or selected_image in ["No images found", "Docker not available", "Docker not installed", "Docker timeout", "Error"]:
+            QMessageBox.warning(
+                self,
+                "Docker Not Available",
+                "Docker is not available or no images found.\n\n"
+                "Please ensure Docker is installed and running, then click the refresh button."
+            )
+            return
+
+        # Show dialog to get command
+        command, ok = QInputDialog.getText(
+            self,
+            "Docker Run Command",
+            f"Enter command to run in Docker image:\n{selected_image}",
+            QLineEdit.EchoMode.Normal,
+            "/bin/bash -c 'echo Hello from Docker'"
+        )
+
+        if not ok or not command:
+            return  # User cancelled
+
+        # Show progress message
+        self.left_panel.setText(f"Running Docker container...\n\nImage: {selected_image}\nCommand: {command}\n\nPlease wait...")
+
+        try:
+            # Execute docker run command
+            # Using -i (interactive) and --rm (remove after exit) flags
+            docker_cmd = ["docker", "run", "-i", "--rm", selected_image] + command.split()
+
+            result = subprocess.run(
+                docker_cmd,
+                capture_output=True,
+                text=True,
+                timeout=30,
             )
 
             # Display the output in the left panel
-            output = f"Python Code Executed\n"
+            output = f"Docker Run Completed\n"
             output += f"{'=' * 60}\n"
+            output += f"Image: {selected_image}\n"
+            output += f"Command: {command}\n"
             output += f"Return code: {result.returncode}\n\n"
 
             if result.stdout:
-                output += f"Output:\n{result.stdout}"
+                output += f"Output:\n{result.stdout}\n"
 
             if result.stderr:
                 output += f"\nStderr:\n{result.stderr}"
@@ -909,9 +990,17 @@ class SWABView(InstanceView):
             self.left_panel.setText(output)
 
         except subprocess.TimeoutExpired:
-            self.left_panel.setText(f"Error: Code execution timed out after 10 seconds\n\nCode:\n{code}")
+            self.left_panel.setText(
+                f"Error: Docker execution timed out after 30 seconds\n\n"
+                f"Image: {selected_image}\n"
+                f"Command: {command}"
+            )
         except Exception as e:
-            self.left_panel.setText(f"Error executing code: {e}\n\nCode:\n{code}")
+            self.left_panel.setText(
+                f"Error executing Docker command: {e}\n\n"
+                f"Image: {selected_image}\n"
+                f"Command: {command}"
+            )
 
     def reload(self) -> None:
         """Reload the view."""
