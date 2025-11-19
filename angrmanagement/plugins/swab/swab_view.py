@@ -146,6 +146,84 @@ class CreateProjectDialog(QDialog):
         self.accept()
 
 
+class DockerRunDialog(QDialog):
+    """Dialog for configuring Docker run command and container path."""
+
+    def __init__(self, selected_image: str, parent=None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Docker Run Configuration")
+        self.setMinimumWidth(500)
+
+        self.selected_image = selected_image
+        self.command = None
+        self.container_path = None
+
+        self._init_ui()
+
+    def _init_ui(self) -> None:
+        layout = QVBoxLayout()
+
+        # Image info label
+        image_label = QLabel(f"Docker Image: {self.selected_image}")
+        image_label.setStyleSheet("font-weight: bold;")
+        layout.addWidget(image_label)
+
+        # Form layout for inputs
+        form_layout = QFormLayout()
+
+        # Command input
+        self.command_input = QLineEdit()
+        self.command_input.setText("/bin/bash -c 'echo Hello from Docker'")
+        self.command_input.setPlaceholderText("e.g., /bin/bash -c 'python main.py'")
+        form_layout.addRow("Command to run:", self.command_input)
+
+        # Container path input
+        self.container_path_input = QLineEdit()
+        self.container_path_input.setText("/workspace")
+        self.container_path_input.setPlaceholderText("e.g., /workspace, /app, /project")
+        form_layout.addRow("Copy project to:", self.container_path_input)
+
+        layout.addLayout(form_layout)
+
+        # Help text
+        help_text = QLabel(
+            "The current project will be copied to the specified path in the container.\n"
+            "You can reference files in your command using this path."
+        )
+        help_text.setStyleSheet("color: gray; font-size: 10pt;")
+        help_text.setWordWrap(True)
+        layout.addWidget(help_text)
+
+        # Dialog buttons
+        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        button_box.accepted.connect(self._accept_dialog)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
+
+        self.setLayout(layout)
+
+    def _accept_dialog(self) -> None:
+        """Validate and accept the dialog."""
+        command = self.command_input.text().strip()
+        container_path = self.container_path_input.text().strip()
+
+        if not command:
+            QMessageBox.warning(self, "Invalid Input", "Please enter a command to run.")
+            return
+
+        if not container_path:
+            QMessageBox.warning(self, "Invalid Input", "Please enter a container path.")
+            return
+
+        if not container_path.startswith("/"):
+            QMessageBox.warning(self, "Invalid Path", "Container path must be an absolute path (start with /).")
+            return
+
+        self.command = command
+        self.container_path = container_path
+        self.accept()
+
+
 class ConfigureProjectDialog(QDialog):
     """Dialog for configuring project with simulation engines."""
 
@@ -865,10 +943,10 @@ class SWABView(InstanceView):
                 self.current_file_path = file_path
                 self.save_button.setEnabled(True)  # Enable Save button
 
-                # Update welcome message
-                self.left_panel.setText(f"File loaded: {file_path}\n\nClick Run to execute Python code.")
+                # Don't update left panel - preserve console output
 
             except Exception as e:
+                # Only show error in left panel if file fails to load
                 self.left_panel.setText(f"Error loading file: {e}\n\nFile: {file_path}")
 
     def _on_save_clicked(self) -> None:
@@ -888,14 +966,8 @@ class SWABView(InstanceView):
             with open(self.current_file_path, "w", encoding="utf-8") as f:
                 f.write(content)
 
-            # Update output panel
-            filename = os.path.basename(self.current_file_path)
-            self.left_panel.setText(
-                f"File saved successfully!\n\n"
-                f"File: {filename}\n"
-                f"Path: {self.current_file_path}\n\n"
-                f"Last saved: {self._get_current_time()}"
-            )
+            # Don't update left panel - preserve console output
+            # File saved successfully (silently)
 
         except Exception as e:
             QMessageBox.critical(self, "Error Saving File", f"Failed to save file:\n{e}")
@@ -958,6 +1030,16 @@ class SWABView(InstanceView):
             )
             return
 
+        # Check if a project is open
+        if not self.current_project_path:
+            QMessageBox.warning(
+                self,
+                "No Project Open",
+                "Please open or create a project first.\n\n"
+                "The project directory will be mounted to the Docker container."
+            )
+            return
+
         # Check if a process is already running
         if self.docker_process is not None and self.docker_process.state() != QProcess.ProcessState.NotRunning:
             QMessageBox.warning(
@@ -967,20 +1049,23 @@ class SWABView(InstanceView):
             )
             return
 
-        # Show dialog to get command
-        command, ok = QInputDialog.getText(
-            self,
-            "Docker Run Command",
-            f"Enter command to run in Docker image:\n{selected_image}",
-            QLineEdit.EchoMode.Normal,
-            "/bin/bash -c 'echo Hello from Docker'"
-        )
-
-        if not ok or not command:
+        # Show custom dialog to get command and container path
+        dialog = DockerRunDialog(selected_image, self)
+        if dialog.exec_() != QDialog.DialogCode.Accepted:
             return  # User cancelled
 
+        command = dialog.command
+        container_path = dialog.container_path
+
         # Initialize output
-        self.left_panel.setText(f"Docker Run Started\n{'=' * 60}\nImage: {selected_image}\nCommand: {command}\n\n--- Output ---\n")
+        self.left_panel.setText(
+            f"Docker Run Started\n{'=' * 60}\n"
+            f"Image: {selected_image}\n"
+            f"Command: {command}\n"
+            f"Project: {self.current_project_path}\n"
+            f"Mounted at: {container_path}\n\n"
+            f"--- Output ---\n"
+        )
 
         # Create QProcess
         self.docker_process = QProcess(self)
@@ -995,9 +1080,17 @@ class SWABView(InstanceView):
         self.docker_process.setProperty("selected_image", selected_image)
         self.docker_process.setProperty("command", command)
 
-        # Start the docker run command
-        # Using -i (interactive) and --rm (remove after exit) flags
-        args = ["run", "-i", "--rm", selected_image] + command.split()
+        # Start the docker run command with volume mount
+        # Using -i (interactive), --rm (remove after exit), and -v (volume mount) flags
+        # Mount the current project directory to the specified container path
+        args = [
+            "run",
+            "-i",
+            "--rm",
+            "-v", f"{self.current_project_path}:{container_path}",
+            selected_image
+        ] + command.split()
+
         self.docker_process.start("docker", args)
 
     def _on_docker_stdout(self) -> None:
