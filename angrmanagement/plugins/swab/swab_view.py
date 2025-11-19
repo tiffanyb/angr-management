@@ -568,13 +568,7 @@ class SWABView(InstanceView):
             self.current_file_path = file_path
             self.save_button.setEnabled(True)
 
-            # Update output panel
-            self.left_panel.setText(
-                f"New file created!\n\n"
-                f"Name: {filename}\n"
-                f"Location: {parent_dir}\n\n"
-                f"The file has been loaded in the editor."
-            )
+            # Don't update left panel - preserve console output
 
         except Exception as e:
             QMessageBox.critical(self, "Error Creating File", f"Failed to create file:\n{e}")
@@ -609,13 +603,7 @@ class SWABView(InstanceView):
             # Create the folder
             os.makedirs(folder_path)
 
-            # Update output panel
-            self.left_panel.setText(
-                f"New folder created!\n\n"
-                f"Name: {foldername}\n"
-                f"Location: {parent_dir}\n"
-                f"Full path: {folder_path}"
-            )
+            # Don't update left panel - preserve console output
 
         except Exception as e:
             QMessageBox.critical(self, "Error Creating Folder", f"Failed to create folder:\n{e}")
@@ -653,12 +641,7 @@ class SWABView(InstanceView):
                 self.current_file_path = None
                 self.save_button.setEnabled(False)
 
-            # Update output panel
-            self.left_panel.setText(
-                f"{item_type.capitalize()} deleted successfully!\n\n"
-                f"Name: {item_name}\n"
-                f"Path: {item_path}"
-            )
+            # Don't update left panel - preserve console output
 
         except Exception as e:
             QMessageBox.critical(self, f"Error Deleting {item_type.capitalize()}", f"Failed to delete {item_type}:\n{e}")
