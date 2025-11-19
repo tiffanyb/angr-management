@@ -234,7 +234,7 @@ class SWABView(InstanceView):
         self.left_panel = QTextEdit()
         self.left_panel.setReadOnly(True)
         self.left_panel.setPlaceholderText("Output will appear here...")
-        self.left_panel.setText("Welcome to SWAB!\n\nWrite Python code in the right panel and click Run.")
+        self.left_panel.setText("Welcome to SWAB!\n\nTo get started:\n1. Click 'Open' to open an existing project, or\n2. Click 'Create' to create a new project\n3. Select a Docker image and click 'Run'")
 
         # Right panel container (IDE-like with file tree and code editor)
         right_container = QWidget()
@@ -310,15 +310,17 @@ class SWABView(InstanceView):
         tree_layout = QVBoxLayout()
         tree_layout.setContentsMargins(0, 0, 0, 0)
 
+        # Placeholder widget for when no project is open
+        self.file_tree_placeholder = QWidget()
+        self.file_tree_placeholder.setStyleSheet("background-color: white;")
+
         self.file_tree = QTreeView()
         self.file_model = QFileSystemModel()
         self.file_model.setRootPath("")
         self.file_tree.setModel(self.file_model)
 
-        # Set root to user's home directory by default
-        import os
-        home_dir = os.path.expanduser("~")
-        self.file_tree.setRootIndex(self.file_model.index(home_dir))
+        # Don't set any root initially - will be set when project is opened/created
+        # This keeps the file tree empty until a project is loaded
 
         # Hide unnecessary columns
         self.file_tree.setColumnHidden(1, True)  # Size
@@ -332,6 +334,10 @@ class SWABView(InstanceView):
         # Connect double-click to open file
         self.file_tree.doubleClicked.connect(self._on_file_double_clicked)
 
+        # Hide the file tree initially until a project is opened
+        self.file_tree.setVisible(False)
+
+        tree_layout.addWidget(self.file_tree_placeholder)
         tree_layout.addWidget(self.file_tree)
         self.file_tree_container.setLayout(tree_layout)
 
@@ -606,6 +612,8 @@ class SWABView(InstanceView):
 
             # Update file tree to show the project folder
             self.file_tree.setRootIndex(self.file_model.index(project_path))
+            self.file_tree.setVisible(True)  # Show the file tree when project is opened
+            self.file_tree_placeholder.setVisible(False)  # Hide the placeholder
 
             # Enable Configure button since we have a project open
             self.configure_button.setEnabled(True)
@@ -703,6 +711,8 @@ class SWABView(InstanceView):
 
                 # Update file tree to show the new project
                 self.file_tree.setRootIndex(self.file_model.index(project_path))
+                self.file_tree.setVisible(True)  # Show the file tree when project is created
+                self.file_tree_placeholder.setVisible(False)  # Hide the placeholder
 
                 # Load main.py into editor
                 with open(main_py_path, "r", encoding="utf-8") as f:
