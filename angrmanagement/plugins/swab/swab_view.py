@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from pyqodeng.core.api import CodeEdit
 from pyqodeng.core.modes import AutoIndentMode, CaretLineHighlighterMode, PygmentsSyntaxHighlighter
 from pyqodeng.core.panels import LineNumberPanel
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QProcess
 from PySide6.QtGui import QFont, QKeySequence, QShortcut, QTextOption
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -218,6 +218,7 @@ class SWABView(InstanceView):
         self.base_caption = "SWAB"
         self.current_file_path = None
         self.current_project_path = None  # Track current project directory
+        self.docker_process = None  # QProcess for running docker commands
         self._init_widgets()
 
     def _init_widgets(self) -> None:
@@ -947,6 +948,15 @@ class SWABView(InstanceView):
             )
             return
 
+        # Check if a process is already running
+        if self.docker_process is not None and self.docker_process.state() != QProcess.ProcessState.NotRunning:
+            QMessageBox.warning(
+                self,
+                "Process Running",
+                "A Docker process is already running. Please wait for it to complete."
+            )
+            return
+
         # Show dialog to get command
         command, ok = QInputDialog.getText(
             self,
@@ -959,48 +969,76 @@ class SWABView(InstanceView):
         if not ok or not command:
             return  # User cancelled
 
-        # Show progress message
-        self.left_panel.setText(f"Running Docker container...\n\nImage: {selected_image}\nCommand: {command}\n\nPlease wait...")
+        # Initialize output
+        self.left_panel.setText(f"Docker Run Started\n{'=' * 60}\nImage: {selected_image}\nCommand: {command}\n\n--- Output ---\n")
 
-        try:
-            # Execute docker run command
-            # Using -i (interactive) and --rm (remove after exit) flags
-            docker_cmd = ["docker", "run", "-i", "--rm", selected_image] + command.split()
+        # Create QProcess
+        self.docker_process = QProcess(self)
 
-            result = subprocess.run(
-                docker_cmd,
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
+        # Connect signals for real-time output
+        self.docker_process.readyReadStandardOutput.connect(self._on_docker_stdout)
+        self.docker_process.readyReadStandardError.connect(self._on_docker_stderr)
+        self.docker_process.finished.connect(self._on_docker_finished)
+        self.docker_process.errorOccurred.connect(self._on_docker_error)
 
-            # Display the output in the left panel
-            output = f"Docker Run Completed\n"
-            output += f"{'=' * 60}\n"
-            output += f"Image: {selected_image}\n"
-            output += f"Command: {command}\n"
-            output += f"Return code: {result.returncode}\n\n"
+        # Store command info for later use
+        self.docker_process.setProperty("selected_image", selected_image)
+        self.docker_process.setProperty("command", command)
 
-            if result.stdout:
-                output += f"Output:\n{result.stdout}\n"
+        # Start the docker run command
+        # Using -i (interactive) and --rm (remove after exit) flags
+        args = ["run", "-i", "--rm", selected_image] + command.split()
+        self.docker_process.start("docker", args)
 
-            if result.stderr:
-                output += f"\nStderr:\n{result.stderr}"
+    def _on_docker_stdout(self) -> None:
+        """Handle stdout from docker process - append to left panel in real-time."""
+        if self.docker_process:
+            data = self.docker_process.readAllStandardOutput().data().decode('utf-8', errors='replace')
+            if data:
+                # Append to existing text
+                current_text = self.left_panel.toPlainText()
+                self.left_panel.setText(current_text + data)
+                # Auto-scroll to bottom
+                scrollbar = self.left_panel.verticalScrollBar()
+                scrollbar.setValue(scrollbar.maximum())
 
-            self.left_panel.setText(output)
+    def _on_docker_stderr(self) -> None:
+        """Handle stderr from docker process - append to left panel in real-time."""
+        if self.docker_process:
+            data = self.docker_process.readAllStandardError().data().decode('utf-8', errors='replace')
+            if data:
+                # Append stderr with prefix
+                current_text = self.left_panel.toPlainText()
+                self.left_panel.setText(current_text + f"[STDERR] {data}")
+                # Auto-scroll to bottom
+                scrollbar = self.left_panel.verticalScrollBar()
+                scrollbar.setValue(scrollbar.maximum())
 
-        except subprocess.TimeoutExpired:
-            self.left_panel.setText(
-                f"Error: Docker execution timed out after 30 seconds\n\n"
-                f"Image: {selected_image}\n"
-                f"Command: {command}"
-            )
-        except Exception as e:
-            self.left_panel.setText(
-                f"Error executing Docker command: {e}\n\n"
-                f"Image: {selected_image}\n"
-                f"Command: {command}"
-            )
+    def _on_docker_finished(self, exit_code: int, exit_status) -> None:
+        """Handle docker process completion."""
+        if self.docker_process:
+            selected_image = self.docker_process.property("selected_image")
+            command = self.docker_process.property("command")
+
+            # Append completion message
+            current_text = self.left_panel.toPlainText()
+            completion_msg = f"\n\n{'=' * 60}\nDocker Run Completed\nExit Code: {exit_code}\n"
+            self.left_panel.setText(current_text + completion_msg)
+
+            # Auto-scroll to bottom
+            scrollbar = self.left_panel.verticalScrollBar()
+            scrollbar.setValue(scrollbar.maximum())
+
+    def _on_docker_error(self, error) -> None:
+        """Handle docker process errors."""
+        if self.docker_process:
+            error_msg = f"\n\n[ERROR] Docker process error: {error}\n"
+            current_text = self.left_panel.toPlainText()
+            self.left_panel.setText(current_text + error_msg)
+
+            # Auto-scroll to bottom
+            scrollbar = self.left_panel.verticalScrollBar()
+            scrollbar.setValue(scrollbar.maximum())
 
     def reload(self) -> None:
         """Reload the view."""
