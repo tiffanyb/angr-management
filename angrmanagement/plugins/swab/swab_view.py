@@ -10,6 +10,7 @@ from pyqodeng.core.modes import AutoIndentMode, CaretLineHighlighterMode, Pygmen
 from pyqodeng.core.panels import LineNumberPanel
 from PySide6.QtCore import Qt, QProcess
 from PySide6.QtGui import QFont, QKeySequence, QShortcut, QTextOption
+from PySide6.QtGui import QBrush, QColor, QPen
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -18,6 +19,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QFileSystemModel,
     QFormLayout,
+    QGraphicsEllipseItem,
     QGroupBox,
     QHBoxLayout,
     QInputDialog,
@@ -39,6 +41,29 @@ from angrmanagement.ui.views.view import InstanceView
 if TYPE_CHECKING:
     from angrmanagement.data.instance import Instance
     from angrmanagement.ui.workspace import Workspace
+
+
+class QWarningAnnotation(QGraphicsEllipseItem):
+    """
+    A yellow dot annotation for SWAB warnings.
+    """
+
+    def __init__(self, addr: int, message: str, *args, **kwargs) -> None:
+        super().__init__(-4, -4, 8, 8, *args, **kwargs)  # 8x8 pixel yellow dot, centered
+        self.addr = addr
+        self.message = message
+        self.setBrush(QBrush(QColor(255, 215, 0)))  # Gold/yellow color
+        self.setPen(QColor(200, 170, 0))  # Darker border
+        self.setToolTip(f"Warning at {hex(addr)}:\n{message}")
+        self.setZValue(100)  # Ensure it's drawn on top
+
+    def boundingRect(self):
+        """Return the bounding rectangle of the annotation."""
+        return super().boundingRect()
+
+    def paint(self, painter, option, widget=None):
+        """Paint the annotation."""
+        super().paint(painter, option, widget)
 
 
 class CreateProjectDialog(QDialog):
@@ -298,6 +323,7 @@ class SWABView(InstanceView):
         self.current_file_path = None
         self.current_project_path = None  # Track current project directory
         self.docker_process = None  # QProcess for running docker commands
+        self.warnings = []  # Store extracted warnings from Docker output
         self._init_widgets()
 
     @staticmethod
@@ -1179,6 +1205,17 @@ class SWABView(InstanceView):
             current_text = self.left_panel.toPlainText()
             completion_msg = f"\n\n{'=' * 60}\nDocker Run Completed\nExit Code: {exit_code}\n"
             self.left_panel.setText(current_text + completion_msg)
+
+            # Extract warnings from console output
+            self.warnings = self.extract_warning(current_text)
+            if self.warnings:
+                warning_summary = f"Found {len(self.warnings)} warning(s)\n"
+                self.left_panel.setText(current_text + completion_msg + warning_summary)
+
+                # Refresh disassembly view to show warning annotations
+                disasm_view = self.workspace.view_manager.first_view_in_category("disassembly")
+                if disasm_view:
+                    disasm_view.refresh()
 
             # Auto-scroll to bottom
             scrollbar = self.left_panel.verticalScrollBar()

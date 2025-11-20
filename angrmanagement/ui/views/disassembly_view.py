@@ -828,7 +828,7 @@ class DisassemblyView(SynchronizedFunctionView):
     def fetch_qblock_annotations(self, qblock):
         addr_to_annotations = defaultdict(list)
         for annotations_ in self.workspace.plugins.build_qblock_annotations(qblock):
-            addr_to_annotations[annotations_.addr].append(annotations)
+            addr_to_annotations[annotations_.addr].append(annotations_)
         for addr in qblock.addr_to_insns:
             if addr in self.instance.project._sim_procedures:
                 hook_annotation = QHookAnnotation(addr)
