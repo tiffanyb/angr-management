@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from typing import TYPE_CHECKING
 
@@ -298,6 +299,62 @@ class SWABView(InstanceView):
         self.current_project_path = None  # Track current project directory
         self.docker_process = None  # QProcess for running docker commands
         self._init_widgets()
+
+    @staticmethod
+    def extract_warning(console_output: str) -> list[dict[str, str]]:
+        """
+        Extract warning messages from Docker console output.
+
+        Parses multi-line warning messages and extracts:
+        - CPU address from the first line (second element in brackets)
+        - Warning message from the second line
+
+        Example input:
+            WARNING:swab.engine: Engine renode: renode:rcc: [cpu1: 0x8005C3E] writing value 0x0 to offset 0x1C
+            WARNING:swab.engine: Engine renode: renode:rcc: Unhandled write to offset 0x1C, value 0x0.
+
+        Returns:
+            List of dictionaries with 'address' and 'message' keys.
+            Example: [{'address': '0x8005C3E', 'message': 'Unhandled write to offset 0x1C, value 0x0.'}]
+        """
+        warnings = []
+        lines = console_output.split('\n')
+
+        i = 0
+        while i < len(lines):
+            line = lines[i].strip()
+
+            # Check if this is a WARNING line with an address
+            if line.startswith('WARNING:') and '[' in line and ']' in line:
+                # Extract the address (second element in brackets)
+                # Pattern: [cpu1: 0x8005C3E] - we want the second part
+                bracket_match = re.search(r'\[([^:]+):\s*([^\]]+)\]', line)
+
+                if bracket_match:
+                    address = bracket_match.group(2).strip()  # Get the second element (the address)
+
+                    # Look for the next line which should contain the warning message
+                    if i + 1 < len(lines):
+                        next_line = lines[i + 1].strip()
+
+                        # Check if next line is also a WARNING line
+                        if next_line.startswith('WARNING:'):
+                            # Extract the message after the last colon
+                            message_match = re.search(r':\s*([^:]+)$', next_line)
+                            if message_match:
+                                message = message_match.group(1).strip()
+
+                                warnings.append({
+                                    'address': address,
+                                    'message': message
+                                })
+
+                                # Skip the next line since we've already processed it
+                                i += 1
+
+            i += 1
+
+        return warnings
 
     def _init_widgets(self) -> None:
         """Initialize the UI widgets."""
