@@ -173,7 +173,7 @@ class DockerRunDialog(QDialog):
 
         # Command input
         self.command_input = QLineEdit()
-        self.command_input.setText("/bin/bash -c 'echo Hello from Docker'")
+        self.command_input.setText("uv run swab /workspace")
         self.command_input.setPlaceholderText("e.g., /bin/bash -c 'python main.py'")
         form_layout.addRow("Command to run:", self.command_input)
 
@@ -375,6 +375,14 @@ class SWABView(InstanceView):
         self.run_button = QPushButton("Run")
         self.run_button.clicked.connect(self._on_run_clicked)
         button_layout.addWidget(self.run_button)
+
+        # Kill button (initially disabled until a process is running)
+        self.kill_button = QPushButton("Kill")
+        self.kill_button.clicked.connect(self._on_kill_clicked)
+        self.kill_button.setEnabled(False)
+        self.kill_button.setToolTip("Kill the running Docker container")
+        button_layout.addWidget(self.kill_button)
+
         right_layout.addLayout(button_layout)
 
         # Load docker images initially
@@ -1076,6 +1084,10 @@ class SWABView(InstanceView):
 
         self.docker_process.start("docker", args)
 
+        # Enable Kill button and disable Run button while process is running
+        self.kill_button.setEnabled(True)
+        self.run_button.setEnabled(False)
+
     def _on_docker_stdout(self) -> None:
         """Handle stdout from docker process - append to left panel in real-time."""
         if self.docker_process:
@@ -1115,6 +1127,10 @@ class SWABView(InstanceView):
             scrollbar = self.left_panel.verticalScrollBar()
             scrollbar.setValue(scrollbar.maximum())
 
+            # Disable Kill button and re-enable Run button
+            self.kill_button.setEnabled(False)
+            self.run_button.setEnabled(True)
+
     def _on_docker_error(self, error) -> None:
         """Handle docker process errors."""
         if self.docker_process:
@@ -1125,6 +1141,25 @@ class SWABView(InstanceView):
             # Auto-scroll to bottom
             scrollbar = self.left_panel.verticalScrollBar()
             scrollbar.setValue(scrollbar.maximum())
+
+    def _on_kill_clicked(self) -> None:
+        """Handle kill button click - terminate the running Docker process."""
+        if self.docker_process and self.docker_process.state() != QProcess.ProcessState.NotRunning:
+            # Append kill message to output
+            current_text = self.left_panel.toPlainText()
+            kill_msg = f"\n\n[KILL] Terminating Docker container...\n"
+            self.left_panel.setText(current_text + kill_msg)
+
+            # Auto-scroll to bottom
+            scrollbar = self.left_panel.verticalScrollBar()
+            scrollbar.setValue(scrollbar.maximum())
+
+            # Kill the process
+            self.docker_process.kill()
+
+            # Disable Kill button and re-enable Run button
+            self.kill_button.setEnabled(False)
+            self.run_button.setEnabled(True)
 
     def reload(self) -> None:
         """Reload the view."""
