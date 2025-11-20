@@ -49,7 +49,9 @@ class QWarningAnnotation(QGraphicsEllipseItem):
     """
 
     def __init__(self, addr: int, message: str, *args, **kwargs) -> None:
-        super().__init__(-4, -4, 8, 8, *args, **kwargs)  # 8x8 pixel yellow dot, centered
+        # Position the dot with a Y offset to align with instruction line
+        # (x, y, width, height) - move Y down by 2 pixels for better alignment
+        super().__init__(-4, 2, 8, 8, *args, **kwargs)  # 8x8 pixel yellow dot
         self.addr = addr
         self.message = message
         self.setBrush(QBrush(QColor(255, 215, 0)))  # Gold/yellow color
