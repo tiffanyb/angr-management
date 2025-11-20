@@ -40,7 +40,7 @@ class SWABPlugin(BasePlugin):
         """
         Add warning annotations to the disassembly view.
 
-        For each warning address, check both the exact address and address-1
+        For each warning address, check both the exact address and address+1
         (since the warning address might be 1 byte off).
         """
         if not self.swab_view or not self.swab_view.warnings:
@@ -58,8 +58,8 @@ class SWABPlugin(BasePlugin):
                     # Parse the warning address (might be hex string like '0x8005C3E')
                     warning_addr = int(warning['address'], 16) if isinstance(warning['address'], str) else warning['address']
 
-                    # Check if instruction address matches warning address or warning address - 1
-                    if insn_addr == warning_addr or insn_addr == warning_addr - 1:
+                    # Check if instruction address matches warning address or warning address + 1
+                    if insn_addr == warning_addr or insn_addr == warning_addr + 1:
                         items.append(QWarningAnnotation(insn_addr, warning['message']))
                         break  # Only add one annotation per instruction
 
