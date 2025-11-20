@@ -8,8 +8,8 @@ from typing import TYPE_CHECKING
 from pyqodeng.core.api import CodeEdit
 from pyqodeng.core.modes import AutoIndentMode, CaretLineHighlighterMode, PygmentsSyntaxHighlighter
 from pyqodeng.core.panels import LineNumberPanel
-from PySide6.QtCore import Qt, QProcess
-from PySide6.QtGui import QFont, QKeySequence, QShortcut, QTextOption
+from PySide6.QtCore import Qt, QProcess, QPoint
+from PySide6.QtGui import QFont, QKeySequence, QShortcut, QTextOption, QTextCursor, QTextCharFormat
 from PySide6.QtGui import QBrush, QColor, QPen
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -41,6 +41,110 @@ from angrmanagement.ui.views.view import InstanceView
 if TYPE_CHECKING:
     from angrmanagement.data.instance import Instance
     from angrmanagement.ui.workspace import Workspace
+
+
+class ConsoleTextEdit(QTextEdit):
+    """
+    Custom QTextEdit for console output with interactive WARNING lines.
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setReadOnly(True)
+        self.setMouseTracking(True)
+        self._hovered_block = None
+        self._parent_view = None
+
+    def set_parent_view(self, view):
+        """Set reference to parent SWABView."""
+        self._parent_view = view
+
+    def mouseMoveEvent(self, event):
+        """Handle mouse move to underline WARNING lines on hover."""
+        cursor = self.cursorForPosition(event.pos())
+        cursor.select(QTextCursor.SelectionType.LineUnderCursor)
+        line_text = cursor.selectedText()
+
+        # Check if this is a WARNING line
+        if line_text.startswith('WARNING:'):
+            # Underline the current line
+            if self._hovered_block != cursor.blockNumber():
+                self._hovered_block = cursor.blockNumber()
+                self._apply_hover_effect(cursor)
+            self.viewport().setCursor(Qt.CursorShape.PointingHandCursor)
+        else:
+            # Remove underline if we're not on a WARNING line
+            if self._hovered_block is not None:
+                self._remove_hover_effect()
+                self._hovered_block = None
+            self.viewport().setCursor(Qt.CursorShape.IBeamCursor)
+
+        super().mouseMoveEvent(event)
+
+    def _apply_hover_effect(self, cursor):
+        """Apply underline to the hovered WARNING line."""
+        # Store current cursor position and scroll position
+        old_cursor = self.textCursor()
+        scrollbar = self.verticalScrollBar()
+        scroll_pos = scrollbar.value()
+
+        # Create format with underline
+        fmt = QTextCharFormat()
+        fmt.setFontUnderline(True)
+
+        # Apply to the line
+        cursor.mergeCharFormat(fmt)
+
+        # Restore cursor and scroll position
+        self.setTextCursor(old_cursor)
+        scrollbar.setValue(scroll_pos)
+
+    def _remove_hover_effect(self):
+        """Remove underline from previously hovered line."""
+        if self._hovered_block is None:
+            return
+
+        # Store scroll position
+        scrollbar = self.verticalScrollBar()
+        scroll_pos = scrollbar.value()
+
+        # Find the previously hovered block
+        cursor = QTextCursor(self.document().findBlockByNumber(self._hovered_block))
+        cursor.select(QTextCursor.SelectionType.LineUnderCursor)
+
+        # Create format without underline
+        fmt = QTextCharFormat()
+        fmt.setFontUnderline(False)
+
+        # Apply to the line
+        cursor.setCharFormat(fmt)
+
+        # Restore scroll position
+        scrollbar.setValue(scroll_pos)
+
+    def contextMenuEvent(self, event):
+        """Handle right-click context menu for WARNING lines."""
+        cursor = self.cursorForPosition(event.pos())
+        cursor.select(QTextCursor.SelectionType.LineUnderCursor)
+        line_text = cursor.selectedText()
+
+        # Check if this is a WARNING line with an address
+        if line_text.startswith('WARNING:') and '[' in line_text and ']' in line_text:
+            # Extract address from the line
+            match = re.search(r'\[([^:]+):\s*([^\]]+)\]', line_text)
+            if match:
+                address = match.group(2).strip()
+
+                # Create custom context menu
+                menu = QMenu(self)
+                debug_action = menu.addAction(f"Debug to this line")
+                action = menu.exec_(event.globalPos())
+
+                if action == debug_action and self._parent_view:
+                    self._parent_view._on_debug_to_line(line_text, address)
+        else:
+            # Show default context menu for non-WARNING lines
+            super().contextMenuEvent(event)
 
 
 class QWarningAnnotation(QGraphicsEllipseItem):
@@ -393,9 +497,9 @@ class SWABView(InstanceView):
         # Create splitter for two panels
         splitter = QSplitter(Qt.Orientation.Horizontal)
 
-        # Left panel - non-editable text
-        self.left_panel = QTextEdit()
-        self.left_panel.setReadOnly(True)
+        # Left panel - console with interactive WARNING lines
+        self.left_panel = ConsoleTextEdit()
+        self.left_panel.set_parent_view(self)
         self.left_panel.setPlaceholderText("Output will appear here...")
         self.left_panel.setText("Welcome to SWAB!\n\nTo get started:\n1. Click 'Open' to open an existing project, or\n2. Click 'Create' to create a new project\n3. Select a Docker image and click 'Run'")
 
@@ -1256,6 +1360,23 @@ class SWABView(InstanceView):
             # Disable Kill button and re-enable Run button
             self.kill_button.setEnabled(False)
             self.run_button.setEnabled(True)
+
+    def _on_debug_to_line(self, line_text: str, address: str) -> None:
+        """
+        Handle 'Debug to this line' context menu action for WARNING lines.
+
+        Args:
+            line_text: The full WARNING line text
+            address: The extracted address from the WARNING line
+        """
+        # Append debug message to console
+        current_text = self.left_panel.toPlainText()
+        debug_msg = f"\n\n[DEBUG] Debug to line: {line_text}\n[DEBUG] Address: {address}\n"
+        self.left_panel.setText(current_text + debug_msg)
+
+        # Auto-scroll to bottom to show the new message
+        scrollbar = self.left_panel.verticalScrollBar()
+        scrollbar.setValue(scrollbar.maximum())
 
     def reload(self) -> None:
         """Reload the view."""
