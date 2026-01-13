@@ -4,15 +4,22 @@ from typing import TYPE_CHECKING
 
 from angrmanagement.plugins import BasePlugin
 
-from .swab_view import QWarningAnnotation, SWABView
+from .models import Warning
+from .ui import QWarningAnnotation
+from .ui.swab_view import SWABView
 
 if TYPE_CHECKING:
     from angrmanagement.ui.workspace import Workspace
 
 
 class SWABPlugin(BasePlugin):
-    """
-    SWAB Plugin - provides a split-panel view with non-editable text and editable code.
+    """SWAB Plugin - Docker-based simulation warning analyzer.
+
+    Provides:
+    - Docker container execution with project mounting
+    - Warning extraction and visualization
+    - Disassembly view annotations
+    - Interactive console with warning navigation
     """
 
     DISPLAY_NAME = "SWAB"
@@ -37,11 +44,21 @@ class SWABPlugin(BasePlugin):
         self.workspace.raise_view(self.swab_view)
 
     def build_qblock_annotations(self, qblock):
-        """
-        Add warning annotations to the disassembly view.
+        """Add warning annotations to the disassembly view.
 
-        For each warning address, check both the exact address and address+1
-        (since the warning address might be 1 byte off).
+        For each warning address, check if any instruction matches.
+        Uses Warning.matches_address() which checks both exact address
+        and address+1 (since warning address might be 1 byte off).
+
+        The annotation uses the instruction's actual address (which may have
+        the Thumb bit set in ARM Thumb mode) rather than the warning's address,
+        ensuring proper positioning in the disassembly view.
+
+        Args:
+            qblock: QBlock to annotate
+
+        Returns:
+            List of QWarningAnnotation objects
         """
         if not self.swab_view or not self.swab_view.warnings:
             return []
@@ -52,20 +69,13 @@ class SWABPlugin(BasePlugin):
         for qinsn in qinsns:
             insn_addr = qinsn.addr
 
-            # Check if this instruction matches any warning address
+            # Check if this instruction matches any warning
             for warning in self.swab_view.warnings:
-                try:
-                    # Parse the warning address (might be hex string like '0x8005C3E')
-                    warning_addr = int(warning['address'], 16) if isinstance(warning['address'], str) else warning['address']
-
-                    # Check if instruction address matches warning address or warning address + 1
-                    if insn_addr == warning_addr or insn_addr == warning_addr + 1:
-                        items.append(QWarningAnnotation(insn_addr, warning['message']))
-                        break  # Only add one annotation per instruction
-
-                except (ValueError, KeyError):
-                    # Skip invalid warning entries
-                    continue
+                if warning.matches_address(insn_addr):
+                    # Pass the instruction address to ensure proper positioning
+                    # (handles ARM Thumb mode where insn_addr has bit 0 set)
+                    items.append(QWarningAnnotation(warning, insn_addr))
+                    break  # Only add one annotation per instruction
 
         return items
 
